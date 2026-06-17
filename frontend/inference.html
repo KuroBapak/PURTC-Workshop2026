@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Edge AI Smart Lock — Live Inference and Testing">
+    <title>Edge AI Smart Lock — Live Inference</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="app-header__title">
+                <span class="icon">🔐</span>
+                Edge AI Smart Lock
+            </div>
+            <div id="esp-badge" class="esp-badge disconnected">
+                <span class="esp-badge__dot"></span>
+                <span>ESP32 Disconnected</span>
+            </div>
+        </header>
+
+        <!-- Progress Bar -->
+        <div id="progress-bar" class="progress-bar"></div>
+
+        <!-- Main Content -->
+        <main data-step="4">
+            <div class="two-col">
+                <!-- Left Column: Video Feed -->
+                <div class="flex flex-col gap-2">
+                    <div class="card">
+                        <h1 class="card__title">Live Inference</h1>
+                        <p class="card__subtitle">Test your trained model in real-time with face detection.</p>
+
+                        <!-- MJPEG Viewport -->
+                        <div class="viewport-frame" id="viewport-frame">
+                            <img id="mjpeg-feed" alt="Inference feed will appear here"
+                                 style="width: 100%; display: block; min-height: 360px; background: #0d1117; object-fit: contain;">
+                        </div>
+
+                        <!-- Controls -->
+                        <div class="mt-2">
+                            <button id="btn-toggle" class="btn btn-primary" style="width: 100%; padding: 14px;">
+                                ▶ Start Inference
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Column: Controls & Results -->
+                <div class="flex flex-col gap-2">
+                    <!-- Threshold Control -->
+                    <div class="card">
+                        <h2 class="card__title" style="font-size: 1.2rem;">Confidence Threshold</h2>
+                        <p class="card__subtitle">Adjust how strict the AI should be when verifying identity.</p>
+
+                        <div class="range-slider">
+                            <span class="text-muted text-small">0%</span>
+                            <input type="range" id="threshold-slider" min="0" max="100" value="70">
+                            <span class="text-muted text-small">100%</span>
+                        </div>
+                        <div class="text-center mt-1">
+                            <span class="range-slider__value" id="threshold-value">70%</span>
+                        </div>
+                    </div>
+
+                    <!-- Result Display -->
+                    <div class="card" id="result-card">
+                        <div class="result-display">
+                            <div class="result-display__status" id="result-status">
+                                Waiting...
+                            </div>
+                            <div class="result-display__confidence" id="result-confidence">
+                                —
+                            </div>
+                            <div class="result-display__label" id="result-label">
+                                Start inference to see results
+                            </div>
+                            <div class="mt-2 text-small text-muted" id="result-faces">
+                                Faces detected: —
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Navigation -->
+                    <div class="btn-group">
+                        <button id="btn-back" class="btn btn-secondary">← Back to Training</button>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="js/common.js"></script>
+    <script src="js/inference.js"></script>
+</body>
+</html>

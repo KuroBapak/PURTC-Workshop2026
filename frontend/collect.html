@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Edge AI Smart Lock — Data Collection and Class Registration">
+    <title>Edge AI Smart Lock — Data Collection</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="app-header__title">
+                <span class="icon">🔐</span>
+                Edge AI Smart Lock
+            </div>
+            <div id="esp-badge" class="esp-badge disconnected">
+                <span class="esp-badge__dot"></span>
+                <span>ESP32 Disconnected</span>
+            </div>
+        </header>
+
+        <!-- Progress Bar -->
+        <div id="progress-bar" class="progress-bar"></div>
+
+        <!-- Main Content -->
+        <main data-step="2">
+            <div class="two-col">
+                <!-- Left Column: Webcam & Capture -->
+                <div class="flex flex-col gap-2">
+                    <div class="card">
+                        <h1 class="card__title">Live Camera Feed</h1>
+                        <p class="card__subtitle">Position yourself with a clean background for best results.</p>
+
+                        <!-- Webcam Viewport -->
+                        <div class="viewport-frame" id="viewport-frame">
+                            <video id="webcam-video" autoplay playsinline muted></video>
+                            <canvas id="capture-canvas" style="display: none;"></canvas>
+                        </div>
+
+                        <!-- Capture Button -->
+                        <div class="mt-2">
+                            <button id="btn-capture" class="btn btn-capture" disabled>
+                                📸 Hold to Capture
+                            </button>
+                            <p class="text-center text-muted text-small mt-1" id="capture-hint">
+                                Select a class first, then press and hold to capture images.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Column: Class Management -->
+                <div class="flex flex-col gap-2">
+                    <div class="card">
+                        <h2 class="card__title" style="font-size: 1.2rem;">Class Management</h2>
+                        <p class="card__subtitle">Add people to recognize. At least 2 classes needed.</p>
+
+                        <!-- Add Class -->
+                        <div class="input-group mb-2">
+                            <input type="text" id="class-name-input" class="form-input" placeholder="Enter name (e.g., Moreno)" maxlength="50">
+                            <button id="btn-add-class" class="btn btn-primary">Add</button>
+                        </div>
+
+                        <!-- Class List -->
+                        <div id="class-list" class="class-list">
+                            <div class="empty-state">
+                                <div class="empty-state__icon">👤</div>
+                                <p class="empty-state__text">No classes added yet</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Navigation -->
+                    <div class="btn-group btn-group--between">
+                        <button id="btn-back" class="btn btn-secondary">← Back</button>
+                        <button id="btn-next" class="btn btn-success">Next → Train Model</button>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="js/common.js"></script>
+    <script src="js/collect.js"></script>
+</body>
+</html>
