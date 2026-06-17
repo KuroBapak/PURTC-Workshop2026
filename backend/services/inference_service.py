@@ -98,6 +98,10 @@ class InferenceService:
         Generator that yields MJPEG frames with face detection boxes
         and classification overlays.
         """
+        consecutive_granted_frames = 0
+        frames_required_for_unlock = 20  # ~1 to 1.5 seconds at 15-20 FPS
+        unlock_hold_frames = 0           # Keep door open after lookaway
+
         while self._running:
             frame = camera_manager.read_frame()
             if frame is None:
@@ -105,142 +109,143 @@ class InferenceService:
                 continue
 
             faces_detected = 0
-            class_name = "unknown"
-            confidence = 0.0
-            status = "denied"
+            best_class_name = "No Face"
+            best_confidence = 0.0
+            frame_status = "denied"
+            face_results = []
 
             # --- Step 1: Face Detection (Haar Cascade) ---
             faces = []
             if self._face_cascade is not None:
                 gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
                 faces = self._face_cascade.detectMultiScale(
-                    gray,
-                    scaleFactor=1.1,
-                    minNeighbors=5,
-                    minSize=(60, 60),
+                    gray, scaleFactor=1.1, minNeighbors=5, minSize=(60, 60)
                 )
                 faces_detected = len(faces) if isinstance(faces, np.ndarray) else 0
 
-            # --- Step 2: Classification (YOLOv8-cls on FACE ONLY) ---
-            if self._model is not None and faces_detected > 0:
-                # Find the largest face (by area)
-                largest_face = max(faces, key=lambda rect: rect[2] * rect[3])
-                x, y, w, h = largest_face
-                
-                # Add a 10% margin to the crop so YOLO sees the whole head
-                margin_x = int(w * 0.1)
-                margin_y = int(h * 0.1)
-                x1 = max(0, x - margin_x)
-                y1 = max(0, y - margin_y)
-                x2 = min(frame.shape[1], x + w + margin_x)
-                y2 = min(frame.shape[0], y + h + margin_y)
-                
-                face_crop = frame[y1:y2, x1:x2]
-
-                try:
-                    results = self._model.predict(
-                        face_crop,
-                        verbose=False,
-                        imgsz=224,
-                    )
-                    if results and len(results) > 0:
-                        result = results[0]
-                        if hasattr(result, 'probs') and result.probs is not None:
-                            top1_idx = result.probs.top1
-                            top1_conf = float(result.probs.top1conf)
-                            class_name = result.names[top1_idx]
-                            confidence = top1_conf
-                except Exception as e:
-                    print(f"[InferenceService] Predict error: {e}")
-            elif faces_detected == 0:
-                class_name = "No Face"
-                confidence = 0.0
-
-            # --- Step 3: Determine access status ---
             with self._lock:
                 threshold = self._threshold
 
-            if confidence > threshold and class_name not in ["unknown", "No Face"] and faces_detected > 0:
-                status = "granted"
+            # --- Step 2: Classification (YOLOv8-cls on EACH face independently) ---
+            if self._model is not None and faces_detected > 0:
+                for (x, y, w, h) in faces:
+                    margin_x = int(w * 0.1)
+                    margin_y = int(h * 0.1)
+                    x1 = max(0, x - margin_x)
+                    y1 = max(0, y - margin_y)
+                    x2 = min(frame.shape[1], x + w + margin_x)
+                    y2 = min(frame.shape[0], y + h + margin_y)
+                    
+                    face_crop = frame[y1:y2, x1:x2]
+                    
+                    f_class = "unknown"
+                    f_conf = 0.0
+                    f_status = "denied"
+
+                    try:
+                        results = self._model.predict(face_crop, verbose=False, imgsz=224)
+                        if results and len(results) > 0:
+                            result = results[0]
+                            if hasattr(result, 'probs') and result.probs is not None:
+                                top1_idx = result.probs.top1
+                                f_conf = float(result.probs.top1conf)
+                                f_class = result.names[top1_idx]
+                    except Exception as e:
+                        pass
+
+                    if f_conf > threshold and f_class not in ["unknown", "No Face"]:
+                        f_status = "granted"
+                        frame_status = "granted"
+
+                    face_results.append({
+                        "box": (x, y, w, h),
+                        "class": f_class,
+                        "conf": f_conf,
+                        "status": f_status
+                    })
+
+                    # Track best result for the UI
+                    if f_status == "granted" and f_conf > best_confidence:
+                        best_class_name = f_class
+                        best_confidence = f_conf
+                    elif frame_status == "denied" and f_conf > best_confidence:
+                        best_class_name = f_class
+                        best_confidence = f_conf
+
+            # --- Step 3: Hardware & Verification Logic ---
+            hardware_state = "locked"
+            progress = 0.0
+
+            if frame_status == "granted":
+                if consecutive_granted_frames < frames_required_for_unlock:
+                    consecutive_granted_frames += 1
+                    hardware_state = "verifying"
+                    progress = consecutive_granted_frames / frames_required_for_unlock
+                else:
+                    hardware_state = "unlocked"
+                    progress = 1.0
+                    unlock_hold_frames = 40  # Hold unlock for ~2.5 seconds if they look away
+                    serial_manager.send("OPEN")
             else:
-                status = "denied"
+                if unlock_hold_frames > 0:
+                    unlock_hold_frames -= 1
+                    hardware_state = "unlocked"
+                    progress = 1.0
+                    serial_manager.send("OPEN")
+                else:
+                    consecutive_granted_frames = max(0, consecutive_granted_frames - 2) # Drain progress if look away
+                    hardware_state = "locked" if consecutive_granted_frames == 0 else "verifying"
+                    progress = consecutive_granted_frames / frames_required_for_unlock
+                    serial_manager.send("CLOSE")
 
             # --- Step 4: Draw bounding boxes and labels ---
             if faces_detected > 0:
-                for (x, y, w, h) in faces:
-                    # Choose color based on status
-                    color = (0, 255, 136) if status == "granted" else (51, 51, 255)  # Green or Red (BGR)
+                for res in face_results:
+                    x, y, w, h = res["box"]
+                    color = (0, 255, 136) if res["status"] == "granted" else (51, 51, 255)
                     cv2.rectangle(frame, (x, y), (x + w, y + h), color, 2)
 
-                    # Draw label above bounding box
-                    label = f"{class_name} {confidence:.0%}"
-                    label_size, baseline = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.7, 2)
+                    label = f"{res['class']} {res['conf']:.0%}"
+                    label_size, _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.7, 2)
                     label_y = max(y - 10, label_size[1] + 10)
 
-                    # Background rectangle for label
-                    cv2.rectangle(
-                        frame,
-                        (x, label_y - label_size[1] - 5),
-                        (x + label_size[0] + 5, label_y + 5),
-                        color, -1
-                    )
-                    cv2.putText(
-                        frame, label,
-                        (x + 2, label_y),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.7,
-                        (255, 255, 255), 2
-                    )
+                    cv2.rectangle(frame, (x, label_y - label_size[1] - 5), (x + label_size[0] + 5, label_y + 5), color, -1)
+                    cv2.putText(frame, label, (x + 2, label_y), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
             else:
-                # No face detected — show classification result in top-left
-                label = f"{class_name} {confidence:.0%}"
-                color = (0, 255, 136) if status == "granted" else (51, 51, 255)
-                cv2.putText(
-                    frame, label,
-                    (10, 30),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.8,
-                    color, 2
-                )
+                cv2.putText(frame, "No Face 0%", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (51, 51, 255), 2)
 
             # --- Step 5: Status bar at bottom ---
             h, w = frame.shape[:2]
-            status_text = f"{'ACCESS GRANTED' if status == 'granted' else 'ACCESS DENIED'} | Threshold: {threshold:.0%}"
-            bar_color = (0, 255, 136) if status == "granted" else (51, 51, 255)
-            cv2.rectangle(frame, (0, h - 35), (w, h), bar_color, -1)
-            cv2.putText(
-                frame, status_text,
-                (10, h - 10),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.6,
-                (255, 255, 255), 2
-            )
-
-            # --- Step 6: Send serial command (with debounce handled by SerialManager) ---
-            if status == "granted":
-                serial_manager.send("OPEN")
+            
+            # Dynamic status text based on hardware state
+            if hardware_state == "unlocked":
+                status_text = "ACCESS GRANTED - UNLOCKED"
+                bar_color = (0, 255, 136)
+            elif hardware_state == "verifying":
+                status_text = f"VERIFYING... HOLD STILL [{int(progress*100)}%]"
+                bar_color = (0, 165, 255)  # Orange
             else:
-                serial_manager.send("CLOSE")
+                status_text = "LOCKED"
+                bar_color = (51, 51, 255)
+                
+            cv2.rectangle(frame, (0, h - 35), (int(w * (progress if hardware_state == 'verifying' else 1.0)), h), bar_color, -1)
+            cv2.putText(frame, status_text, (10, h - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
 
-            # --- Step 7: Store result for WebSocket ---
-            result_dict = {
-                "class_name": class_name,
-                "confidence": round(confidence, 4),
-                "status": status,
-                "faces_detected": faces_detected,
-            }
+            # --- Step 6: Store result for WebSocket ---
             with self._lock:
-                self._latest_result = result_dict
+                self._latest_result = {
+                    "class_name": best_class_name,
+                    "confidence": round(best_confidence, 4),
+                    "status": "granted" if hardware_state == "unlocked" else "denied",
+                    "faces_detected": faces_detected,
+                    "hardware_state": hardware_state,
+                    "progress": progress
+                }
 
-            # --- Step 8: Encode frame as JPEG and yield for MJPEG ---
+            # --- Step 7: Encode frame as JPEG and yield for MJPEG ---
             _, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
-            frame_bytes = buffer.tobytes()
+            yield (b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + buffer.tobytes() + b"\r\n")
 
-            yield (
-                b"--frame\r\n"
-                b"Content-Type: image/jpeg\r\n\r\n" +
-                frame_bytes +
-                b"\r\n"
-            )
-
-            # Small delay to control frame rate (~20 FPS)
             time.sleep(0.05)
 
     @property

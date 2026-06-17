@@ -132,29 +132,46 @@ function connectResultsWs() {
 }
 
 function updateResultDisplay(data) {
-    const { class_name, confidence, status, faces_detected } = data;
+    const { class_name, confidence, status, faces_detected, hardware_state, progress } = data;
     const confPercent = Math.round(confidence * 100);
 
     // Update result text
     resultConfidence.textContent = `${confPercent}%`;
     resultFaces.textContent = `Faces detected: ${faces_detected}`;
 
-    if (status === 'granted') {
-        resultStatus.textContent = `✅ Welcome, ${class_name}`;
+    if (hardware_state === 'unlocked') {
+        resultStatus.textContent = `🔓 UNLOCKED: ${class_name}`;
         resultStatus.className = 'result-display__status granted';
-        resultLabel.textContent = 'Access Granted';
+        resultLabel.textContent = 'Hardware Triggered: OPEN';
         resultConfidence.style.color = 'var(--success)';
 
         viewportFrame.classList.add('pulse-green');
-        viewportFrame.classList.remove('pulse-red');
+        viewportFrame.classList.remove('pulse-red', 'pulse-orange');
+    } else if (hardware_state === 'verifying') {
+        const progPercent = Math.round(progress * 100);
+        resultStatus.textContent = `⏳ Verifying... ${progPercent}%`;
+        resultStatus.className = 'result-display__status verifying'; // Will style this in CSS
+        resultLabel.textContent = `Hold still, ${class_name}`;
+        resultConfidence.style.color = '#FFA500';
+
+        viewportFrame.classList.add('pulse-orange');
+        viewportFrame.classList.remove('pulse-red', 'pulse-green');
     } else {
         resultStatus.textContent = '🚫 Access Denied';
         resultStatus.className = 'result-display__status denied';
-        resultLabel.textContent = class_name === 'unknown' ? 'Unknown Person' : `${class_name} — Below threshold`;
+        
+        if (faces_detected === 0) {
+            resultLabel.textContent = 'No face detected';
+        } else if (class_name === 'unknown' || class_name === 'No Face') {
+            resultLabel.textContent = 'Unknown Person';
+        } else {
+            resultLabel.textContent = `${class_name} — Below threshold`;
+        }
+        
         resultConfidence.style.color = 'var(--danger)';
 
         viewportFrame.classList.add('pulse-red');
-        viewportFrame.classList.remove('pulse-green');
+        viewportFrame.classList.remove('pulse-green', 'pulse-orange');
     }
 }
 

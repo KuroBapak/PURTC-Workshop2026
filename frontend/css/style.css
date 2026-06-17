@@ -676,6 +676,12 @@ main.page-exit {
     animation: pulseRed 1.5s ease-in-out infinite;
 }
 
+.viewport-frame.pulse-orange {
+    border-color: #FFA500;
+    box-shadow: 0 0 30px rgba(255, 165, 0, 0.4), inset 0 0 30px rgba(255, 165, 0, 0.05);
+    animation: pulseOrange 1.5s ease-in-out infinite;
+}
+
 @keyframes pulseGreen {
     0%, 100% { box-shadow: 0 0 20px rgba(var(--success-rgb), 0.3); }
     50% { box-shadow: 0 0 40px rgba(var(--success-rgb), 0.6), 0 0 80px rgba(var(--success-rgb), 0.2); }
@@ -684,6 +690,11 @@ main.page-exit {
 @keyframes pulseRed {
     0%, 100% { box-shadow: 0 0 20px rgba(var(--danger-rgb), 0.3); }
     50% { box-shadow: 0 0 40px rgba(var(--danger-rgb), 0.6), 0 0 80px rgba(var(--danger-rgb), 0.2); }
+}
+
+@keyframes pulseOrange {
+    0%, 100% { box-shadow: 0 0 20px rgba(255, 165, 0, 0.3); }
+    50% { box-shadow: 0 0 40px rgba(255, 165, 0, 0.6), 0 0 80px rgba(255, 165, 0, 0.2); }
 }
 
 /* ---------- Class Cards ---------- */
@@ -900,6 +911,11 @@ main.page-exit {
 .result-display__status.denied {
     color: var(--danger);
     text-shadow: 0 0 20px rgba(var(--danger-rgb), 0.4);
+}
+
+.result-display__status.verifying {
+    color: #FFA500;
+    text-shadow: 0 0 20px rgba(255, 165, 0, 0.4);
 }
 
 .result-display__confidence {
