@@ -110,6 +110,7 @@ class InferenceService:
             status = "denied"
 
             # --- Step 1: Face Detection (Haar Cascade) ---
+            faces = []
             if self._face_cascade is not None:
                 gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
                 faces = self._face_cascade.detectMultiScale(
@@ -120,11 +121,25 @@ class InferenceService:
                 )
                 faces_detected = len(faces) if isinstance(faces, np.ndarray) else 0
 
-            # --- Step 2: Classification (YOLOv8-cls on full frame) ---
-            if self._model is not None:
+            # --- Step 2: Classification (YOLOv8-cls on FACE ONLY) ---
+            if self._model is not None and faces_detected > 0:
+                # Find the largest face (by area)
+                largest_face = max(faces, key=lambda rect: rect[2] * rect[3])
+                x, y, w, h = largest_face
+                
+                # Add a 10% margin to the crop so YOLO sees the whole head
+                margin_x = int(w * 0.1)
+                margin_y = int(h * 0.1)
+                x1 = max(0, x - margin_x)
+                y1 = max(0, y - margin_y)
+                x2 = min(frame.shape[1], x + w + margin_x)
+                y2 = min(frame.shape[0], y + h + margin_y)
+                
+                face_crop = frame[y1:y2, x1:x2]
+
                 try:
                     results = self._model.predict(
-                        frame,
+                        face_crop,
                         verbose=False,
                         imgsz=224,
                     )
@@ -137,12 +152,15 @@ class InferenceService:
                             confidence = top1_conf
                 except Exception as e:
                     print(f"[InferenceService] Predict error: {e}")
+            elif faces_detected == 0:
+                class_name = "No Face"
+                confidence = 0.0
 
             # --- Step 3: Determine access status ---
             with self._lock:
                 threshold = self._threshold
 
-            if confidence > threshold and class_name != "unknown":
+            if confidence > threshold and class_name not in ["unknown", "No Face"] and faces_detected > 0:
                 status = "granted"
             else:
                 status = "denied"

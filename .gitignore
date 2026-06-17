@@ -7,7 +7,6 @@ __pycache__/
 # PyTorch & YOLOv8
 runs/
 *.cache
-*.pt
 
 # MIOpen Cache
 .miopen/

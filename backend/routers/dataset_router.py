@@ -6,6 +6,9 @@ import os
 import shutil
 from pathlib import Path
 
+import cv2
+import numpy as np
+
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
@@ -17,10 +20,12 @@ ws_router = APIRouter()
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 DATASET_DIR = PROJECT_ROOT / "dataset" / "train"
 
+# Load Haar cascade for data collection face cropping
+cascade_path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+face_cascade = cv2.CascadeClassifier(cascade_path)
 
 class CreateClassRequest(BaseModel):
     name: str
-
 
 @router.get("/classes")
 async def list_classes():
@@ -67,7 +72,8 @@ async def delete_class(name: str):
 async def capture_websocket(websocket: WebSocket, class_name: str):
     """
     WebSocket for burst image capture.
-    Receives binary JPEG frames and saves them to the class folder.
+    Receives binary JPEG frames, extracts the face using Haar Cascades,
+    and saves the tightly cropped face to the class folder.
     Sends back JSON count updates after each save.
     """
     class_dir = DATASET_DIR / class_name
@@ -91,15 +97,43 @@ async def capture_websocket(websocket: WebSocket, class_name: str):
             # Receive binary JPEG data from browser
             data = await websocket.receive_bytes()
 
-            # Save as sequentially numbered JPEG
-            seq += 1
-            filename = f"{seq:04d}.jpg"
-            filepath = class_dir / filename
+            # Decode the image to find the face
+            nparr = np.frombuffer(data, np.uint8)
+            frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
-            with open(filepath, "wb") as f:
-                f.write(data)
+            if frame is not None and not face_cascade.empty():
+                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                faces = face_cascade.detectMultiScale(
+                    gray, scaleFactor=1.1, minNeighbors=5, minSize=(60, 60)
+                )
 
-            total_saved += 1
+                if len(faces) > 0:
+                    # Find largest face
+                    largest_face = max(faces, key=lambda rect: rect[2] * rect[3])
+                    x, y, w, h = largest_face
+                    
+                    # Add 10% margin
+                    margin_x = int(w * 0.1)
+                    margin_y = int(h * 0.1)
+                    x1 = max(0, x - margin_x)
+                    y1 = max(0, y - margin_y)
+                    x2 = min(frame.shape[1], x + w + margin_x)
+                    y2 = min(frame.shape[0], y + h + margin_y)
+                    
+                    face_crop = frame[y1:y2, x1:x2]
+                    
+                    # Encode to JPEG and save
+                    _, buffer = cv2.imencode('.jpg', face_crop, [cv2.IMWRITE_JPEG_QUALITY, 90])
+                    save_data = buffer.tobytes()
+
+                    seq += 1
+                    filename = f"{seq:04d}.jpg"
+                    filepath = class_dir / filename
+
+                    with open(filepath, "wb") as f:
+                        f.write(save_data)
+
+                    total_saved += 1
 
             # Send count update back to client
             await websocket.send_json({"count": seq, "saved": total_saved})

@@ -55,7 +55,7 @@ async function initCamera() {
 async function loadClasses() {
     try {
         const data = await apiGet('/api/dataset/classes');
-        classes = data.classes;
+        classes = data.classes.filter(c => c.name !== 'unknown');
         renderClassList();
     } catch {
         // Silently fail if backend not ready
@@ -112,6 +112,10 @@ async function addClass() {
     const name = classNameInput.value.trim();
     if (!name) {
         showToast('Enter a class name', 'error');
+        return;
+    }
+    if (name.toLowerCase() === 'unknown') {
+        showToast('The "unknown" class is built-in and cannot be modified.', 'error');
         return;
     }
 
