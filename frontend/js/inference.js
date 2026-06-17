@@ -15,6 +15,7 @@ const resultConfidence = document.getElementById('result-confidence');
 const resultLabel = document.getElementById('result-label');
 const resultFaces = document.getElementById('result-faces');
 const btnBack = document.getElementById('btn-back');
+const cameraSelect = document.getElementById('camera-select');
 
 // ===================== State =====================
 
@@ -29,7 +30,12 @@ async function startInference() {
     btnToggle.innerHTML = '<span class="spinner"></span> Starting...';
 
     try {
-        await apiPost('/api/inference/start');
+        const camIdx = parseInt(cameraSelect.value, 10) || 0;
+        await fetch(`${API_BASE}/api/inference/start`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ camera_index: camIdx }),
+        });
 
         // Set MJPEG stream source
         mjpegFeed.src = `${API_BASE}/api/inference/feed`;

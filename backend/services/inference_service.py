@@ -25,7 +25,7 @@ class InferenceService:
         self._lock = threading.Lock()
         self._class_names: list[str] = []
 
-    def start(self, model_path: str, threshold: float = 0.70) -> bool:
+    def start(self, model_path: str, threshold: float = 0.70, camera_index: int = 0) -> bool:
         """Load models and start the inference engine."""
         try:
             from ultralytics import YOLO
@@ -60,8 +60,8 @@ class InferenceService:
                 print("[InferenceService] Warning: Haar Cascade failed to load")
 
             # Open camera
-            if not camera_manager.open():
-                print("[InferenceService] Failed to open camera")
+            if not camera_manager.open(camera_index=camera_index):
+                print(f"[InferenceService] Failed to open camera {camera_index}")
                 return False
 
             self._threshold = threshold

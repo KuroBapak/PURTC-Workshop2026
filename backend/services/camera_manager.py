@@ -34,15 +34,33 @@ class CameraManager:
         with self._camera_lock:
             if self._cap and self._cap.isOpened():
                 return True
+                
+            # Try DirectShow first on Windows for reliable access, and check indices 0, 1, 2
+            # Some Windows Hello laptops map the IR camera to 0 and the real webcam to 1
+            for idx in [camera_index, 1, 2, 0]:
+                self._cap = cv2.VideoCapture(idx, cv2.CAP_DSHOW)
+                if self._cap.isOpened():
+                    # Verify it actually returns a frame (avoids dummy/IR cameras that are blocked)
+                    ret, frame = self._cap.read()
+                    if ret and frame is not None:
+                        print(f"[CameraManager] Camera {idx} opened successfully via DSHOW")
+                        # Set reasonable resolution for workshop
+                        self._cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+                        self._cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+                        return True
+                if self._cap:
+                    self._cap.release()
+
+            # Fallback to default backend
             self._cap = cv2.VideoCapture(camera_index)
             if not self._cap.isOpened():
                 print(f"[CameraManager] Failed to open camera {camera_index}")
                 self._cap = None
                 return False
-            # Set reasonable resolution for workshop
+                
             self._cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
             self._cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-            print(f"[CameraManager] Camera {camera_index} opened")
+            print(f"[CameraManager] Camera {camera_index} opened via default backend")
             return True
 
     def close(self):

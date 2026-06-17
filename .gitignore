@@ -1,6 +1,30 @@
+# Python Virtual Environments
 .venv/
+env/
+__pycache__/
+*.pyc
+
+# PyTorch & YOLOv8
 runs/
+*.cache
+*.pt
+
+# MIOpen Cache
+.miopen/
+
+# IDE & OS
+.vscode/
+.idea/
+__MACOSX/
+.DS_Store
+Thumbs.db
+
+# Temp Files
+frozen.txt
+
+# Dataset (Ignore contents, keep structure)
 dataset/*
 !dataset/train/
 dataset/train/*
 !dataset/train/unknown/
+!dataset/train/unknown/.gitkeep

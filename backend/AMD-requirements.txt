@@ -1,10 +1,10 @@
-fastapi>=0.115.0
-uvicorn[standard]>=0.30.0
-ultralytics>=8.2.0
-opencv-python>=4.10.0
-pyserial>=3.5.0
-aiofiles>=24.1.0
-websockets>=12.0
+fastapi==0.137.1
+uvicorn[standard]==0.49.0
+ultralytics==8.4.69
+opencv-python==4.13.0.92
+pyserial==3.5.0
+aiofiles==25.1.0
+websockets==16.0
 
 # AMD ROCm 6.4.4 Native Windows Preview Support (Python 3.12)
 https://repo.radeon.com/rocm/windows/rocm-rel-6.4.4/torch-2.8.0a0%2Bgitfc14c65-cp312-cp312-win_amd64.whl

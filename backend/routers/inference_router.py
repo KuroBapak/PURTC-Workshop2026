@@ -21,6 +21,9 @@ ws_router = APIRouter()
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
 
+class StartInferenceRequest(BaseModel):
+    camera_index: int = 0
+
 class ThresholdRequest(BaseModel):
     value: float
 
@@ -42,7 +45,7 @@ def find_best_model() -> str | None:
 
 
 @router.post("/start")
-async def start_inference():
+async def start_inference(request: StartInferenceRequest = StartInferenceRequest()):
     """Start the inference engine and MJPEG stream."""
     if inference_service.is_running:
         raise HTTPException(status_code=409, detail="Inference is already running")
@@ -54,7 +57,7 @@ async def start_inference():
             detail="No trained model found. Complete training first."
         )
 
-    success = inference_service.start(model_path)
+    success = inference_service.start(model_path, camera_index=request.camera_index)
     if not success:
         raise HTTPException(status_code=500, detail="Failed to start inference engine")
 
