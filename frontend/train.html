@@ -42,14 +42,19 @@
                             <div class="summary-item__label">Total Images</div>
                         </div>
                         <div class="summary-item">
-                            <div class="summary-item__value">50</div>
+                            <div class="summary-item__value" id="summary-epochs">50</div>
                             <div class="summary-item__label">Max Epochs</div>
                         </div>
                         <div class="summary-item">
-                            <div class="summary-item__value">Auto</div>
+                            <div class="summary-item__value" id="summary-batch">Auto</div>
                             <div class="summary-item__label">Batch Size</div>
                         </div>
                     </div>
+                </div>
+
+                <!-- Dynamic Class Split View -->
+                <div id="split-container" style="display: none; margin-top: 15px; gap: 10px; flex-wrap: wrap; justify-content: center;">
+                    <!-- JS will populate this -->
                 </div>
 
                 <!-- Training Action -->
@@ -57,6 +62,17 @@
                     <button id="btn-train" class="btn btn-primary" style="padding: 14px 40px; font-size: 1rem;">
                         🚀 Start Training
                     </button>
+                </div>
+
+                <!-- Dynamic Progress View -->
+                <div id="epoch-progress-container" style="display: none; margin-bottom: 15px; padding: 15px; background: rgba(0,0,0,0.2); border: 1px solid var(--border); border-radius: 8px;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px; font-weight: 500;">
+                        <span id="epoch-text">Epoch 0 / 50</span>
+                        <span id="epoch-percent" style="color: var(--primary);">0%</span>
+                    </div>
+                    <div style="width: 100%; background: var(--border); border-radius: 10px; height: 10px; overflow: hidden;">
+                        <div id="epoch-bar" style="width: 0%; height: 100%; background: var(--primary); transition: width 0.3s ease;"></div>
+                    </div>
                 </div>
 
                 <!-- Live Terminal -->

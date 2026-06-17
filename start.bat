@@ -82,6 +82,11 @@ echo.
 echo   Open frontend\index.html in your browser!
 echo  -----------------------------------------------
 echo.
+
+REM Disable MIOpen SQLite caching to prevent "no such column: mode" crashes on Windows ROCm preview
+set MIOPEN_DISABLE_CACHE=1
+set MIOPEN_DEBUG_DISABLE_FIND_DB=1
+
 python backend\main.py
 echo.
 echo  Server stopped.

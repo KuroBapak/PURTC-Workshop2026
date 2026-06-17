@@ -128,17 +128,68 @@ class TrainingService:
 
             # Detect hardware
             import torch
+            amp = True
+            batch_size = -1
             try:
                 if torch.cuda.is_available():
                     self._broadcast(f"   [Hardware] Using GPU (ROCm/CUDA): {torch.cuda.get_device_name(0)}")
                     device = "cuda"
+                    
+                    # WORKAROUND for AMD ROCm 6.4.4 Preview on Windows:
+                    # Disable cuDNN (which disables MIOpen on ROCm) to prevent the "no such column: mode" MIOpen SQLite crash
+                    torch.backends.cudnn.enabled = False
+                    self._broadcast(f"   [Hardware] MIOpen bypassed for stability")
                 else:
                     import torch_directml
-                    device = torch_directml.device()
-                    self._broadcast(f"   [Hardware] Using AMD DirectML Device")
+                    # We detect DirectML, but force CPU for training due to unsupported YOLOv8 ops
+                    self._broadcast(f"   [Hardware] Using AMD DirectML Device (Forced CPU for Training)")
+                    device = "cpu"
+                    amp = False
+                    batch_size = 16
             except ImportError:
                 device = "cpu"
                 self._broadcast(f"   [Hardware] Using CPU (No ROCm/DirectML found)")
+                amp = False
+                batch_size = 16
+
+            # Create a proper 80/20 train/val split for YOLOv8
+            import shutil
+            import random
+            dataset_root = Path(data_path)
+            val_path = dataset_root / "val"
+            train_path = dataset_root / "train"
+            
+            if train_path.exists():
+                self._broadcast("   [Setup] Creating 80/20 train/val dataset split...")
+                val_path.mkdir(parents=True, exist_ok=True)
+                
+                for cls_dir in train_path.iterdir():
+                    if not cls_dir.is_dir():
+                        continue
+                        
+                    class_name = cls_dir.name
+                    val_cls_dir = val_path / class_name
+                    val_cls_dir.mkdir(parents=True, exist_ok=True)
+                    
+                    # 1. Move everything from val back to train first (for re-training)
+                    for f in val_cls_dir.iterdir():
+                        shutil.move(str(f), str(cls_dir / f.name))
+                        
+                    # 2. Get all images in train
+                    all_images = [f for f in cls_dir.iterdir() if f.is_file()]
+                    total_imgs = len(all_images)
+                    
+                    if total_imgs > 0:
+                        # 3. Calculate 20% for val
+                        val_count = max(1, int(total_imgs * 0.2)) if total_imgs >= 2 else 0
+                        train_count = total_imgs - val_count
+                        
+                        # 4. Randomly select and move to val
+                        val_images = random.sample(all_images, val_count)
+                        for img in val_images:
+                            shutil.move(str(img), str(val_cls_dir / img.name))
+                            
+                        self._broadcast(f"   [{class_name}] Total: {total_imgs} images -> Train: {train_count} | Val: {val_count}")
 
             # Run training
             model = YOLO("yolov8n-cls.pt")
@@ -146,18 +197,20 @@ class TrainingService:
                 data=data_path,
                 epochs=50,
                 imgsz=224,
-                batch=-1,       # AutoBatch — auto-detect optimal batch size per GPU
+                batch=batch_size,
                 patience=10,    # Early stopping
                 device=device,  # Use detected device
+                amp=amp,        # Disable AMP for DirectML/CPU
                 project=project_path,
                 name="train",
                 exist_ok=True,  # Overwrite previous run
                 verbose=True,
             )
 
-            # Find best.pt
+            # Find best.pt or last.pt
             weights_dir = Path(project_path) / "train" / "weights"
             best_pt = weights_dir / "best.pt"
+            last_pt = weights_dir / "last.pt"
 
             if best_pt.exists():
                 self._model_path = str(best_pt)
@@ -165,19 +218,27 @@ class TrainingService:
                 self._broadcast("=" * 60)
                 self._broadcast(f"✅ Training Complete! Model saved to: {best_pt}")
                 self._broadcast("=" * 60)
+            elif last_pt.exists():
+                self._model_path = str(last_pt)
+                self._state = "completed"
+                self._broadcast("=" * 60)
+                self._broadcast(f"✅ Training Complete! Model saved to: {last_pt}")
+                self._broadcast("=" * 60)
             else:
-                # Fallback: search for best.pt in runs directory
+                # Fallback: search for best.pt or last.pt in runs directory
                 for root, dirs, files in os.walk(project_path):
                     if "best.pt" in files:
                         self._model_path = os.path.join(root, "best.pt")
                         break
+                    elif "last.pt" in files:
+                        self._model_path = os.path.join(root, "last.pt")
 
                 if self._model_path:
                     self._state = "completed"
                     self._broadcast(f"✅ Training Complete! Model: {self._model_path}")
                 else:
                     self._state = "failed"
-                    self._error = "Training finished but best.pt not found"
+                    self._error = "Training finished but no model weights found"
                     self._broadcast(f"❌ Error: {self._error}")
 
         except Exception as e:

@@ -1,4 +1,3 @@
---extra-index-url https://download.pytorch.org/whl/rocm6.1
 fastapi>=0.115.0
 uvicorn[standard]>=0.30.0
 ultralytics>=8.2.0
@@ -6,6 +5,8 @@ opencv-python>=4.10.0
 pyserial>=3.5.0
 aiofiles>=24.1.0
 websockets>=12.0
-torch
-torchvision
-torch-directml
+
+# AMD ROCm 6.4.4 Native Windows Preview Support (Python 3.12)
+https://repo.radeon.com/rocm/windows/rocm-rel-6.4.4/torch-2.8.0a0%2Bgitfc14c65-cp312-cp312-win_amd64.whl
+https://repo.radeon.com/rocm/windows/rocm-rel-6.4.4/torchaudio-2.6.0a0%2B1a8f621-cp312-cp312-win_amd64.whl
+https://repo.radeon.com/rocm/windows/rocm-rel-6.4.4/torchvision-0.24.0a0%2Bc85f008-cp312-cp312-win_amd64.whl

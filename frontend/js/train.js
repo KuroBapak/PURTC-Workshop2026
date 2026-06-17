@@ -7,6 +7,7 @@
 
 const summaryClasses = document.getElementById('summary-classes');
 const summaryImages = document.getElementById('summary-images');
+const summaryBatch = document.getElementById('summary-batch');
 const btnTrain = document.getElementById('btn-train');
 const terminal = document.getElementById('terminal');
 const terminalOutput = document.getElementById('terminal-output');
@@ -14,6 +15,12 @@ const terminalCursor = document.getElementById('terminal-cursor');
 const btnBack = document.getElementById('btn-back');
 const btnNext = document.getElementById('btn-next');
 const actionArea = document.getElementById('action-area');
+
+const epochProgressContainer = document.getElementById('epoch-progress-container');
+const epochText = document.getElementById('epoch-text');
+const epochPercent = document.getElementById('epoch-percent');
+const epochBar = document.getElementById('epoch-bar');
+const splitContainer = document.getElementById('split-container');
 
 // ===================== State =====================
 
@@ -64,9 +71,11 @@ async function startTraining() {
     try {
         await apiPost('/api/training/start');
 
-        // Show terminal
+        // Show terminal and clear previous splits
         terminal.style.display = 'block';
         terminalOutput.innerHTML = '';
+        splitContainer.innerHTML = '';
+        splitContainer.style.display = 'none';
 
         // Connect to log stream
         startLogStream();
@@ -117,6 +126,40 @@ function startLogStream() {
             }
         } catch {
             // Not JSON — it's a log line
+        }
+
+        // Try to parse YOLOv8 Epoch progress (e.g., "      1/50      1.19G...")
+        const epochMatch = data.match(/^\s*(\d+)\/(\d+)\s+/);
+        if (epochMatch) {
+            epochProgressContainer.style.display = 'block';
+            const current = parseInt(epochMatch[1], 10);
+            const total = parseInt(epochMatch[2], 10);
+            const percent = Math.min(100, Math.round((current / total) * 100));
+            
+            epochText.textContent = `Epoch ${current} / ${total}`;
+            epochPercent.textContent = `${percent}%`;
+            epochBar.style.width = `${percent}%`;
+        }
+
+        // Parse Hardware / Batch size
+        if (data.includes("[Hardware] Using AMD DirectML Device") || data.includes("[Hardware] Using CPU")) {
+            if (summaryBatch) summaryBatch.textContent = "16"; // We force batch=16 for DirectML/CPU
+        } else if (data.includes("[Hardware] Using GPU (ROCm/CUDA)")) {
+            if (summaryBatch) summaryBatch.textContent = "Auto";
+        }
+
+        // Parse Train/Val split
+        const splitMatch = data.match(/\[(.*?)\] Total: (\d+) images -> Train: (\d+) \| Val: (\d+)/);
+        if (splitMatch) {
+            splitContainer.style.display = 'flex';
+            const className = splitMatch[1];
+            const trainCount = splitMatch[3];
+            const valCount = splitMatch[4];
+            
+            const chip = document.createElement('div');
+            chip.style.cssText = 'background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 20px; padding: 6px 16px; font-size: 0.9rem; margin-bottom: 10px;';
+            chip.innerHTML = `<strong style="color: var(--primary)">${className}</strong>: ${trainCount} Train / ${valCount} Val`;
+            splitContainer.appendChild(chip);
         }
 
         appendTerminalLine(data);

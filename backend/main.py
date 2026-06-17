@@ -4,6 +4,10 @@ Main application entry point with CORS, router mounting, and startup/shutdown li
 """
 
 import os
+# Disable MIOpen SQLite caching to prevent "no such column: mode" crashes on Windows ROCm preview
+os.environ["MIOPEN_DISABLE_CACHE"] = "1"
+os.environ["MIOPEN_DEBUG_DISABLE_FIND_DB"] = "1"
+
 import shutil
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -28,13 +32,6 @@ async def lifespan(app: FastAPI):
     print(f"[Startup] Dataset directory: {DATASET_DIR}")
     print(f"[Startup] Project root: {PROJECT_ROOT}")
     
-    # Auto-seed 'unknown' dataset if it doesn't exist
-    unknown_dir = DATASET_DIR / "unknown"
-    assets_unknown = PROJECT_ROOT / "assets" / "default_unknown"
-    if not unknown_dir.exists() and assets_unknown.exists():
-        print("[Startup] Seeding 'unknown' class with default dataset...")
-        shutil.copytree(assets_unknown, unknown_dir)
-        print(f"[Startup] Copied default unknown faces to {unknown_dir}")
     print("=" * 50)
     print("  Edge AI Smart Lock — Backend Ready!")
     print("  API Docs: http://localhost:8000/docs")
